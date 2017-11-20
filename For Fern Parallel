@@ -7,14 +7,14 @@
 #include <algorithm>
 #include <numeric>
 #include <functional>
-#include <ppl.h>
+#include <ppl.h>	//parallel_for
 #include <ctime>
 #include <stdint.h>
 #include <intrin.h>
 
 
 using namespace std;
-using namespace  concurrency;
+using namespace concurrency;	//parallel_for
 
 long double finalValue = 0;
 
@@ -25,30 +25,32 @@ using set = vector<vector<int>>;	//sets are actual objects in C++ so make sure t
 
 void ClockTicks(const unsigned __int64 &ticks);
 
+//variable prep
 matrix createW(const int &n, const int &m, const bool &wMod);
 matrix createW(ifstream &inFile);
 
+//major calculations
 set subsetsToList(const int &n, const int &r);
 void subsetsToList2(
 	set &matrix1, matrix &matrixW, const int &n, const int & m, const int &k, const int &threadIndex, const int &threadCount);
-
 long roUnion(set &vec);
 double matProduct(matrix &matrixW, set &set1);
 void bigSum(matrix &matrixW, const int &n, const int &m, const int &k, const int &threadCount);
 
+//minor calculation
+long long partialFactorial(const long &n, const long &n2, const long &k);
+
+//testing and display purposes
 void printVector(const set &vec);
 void printVector(const matrix &vec);
 void printVector(const vector<set> &vec);
 
-long long partialFactorial(const long &n, const long &n2, const long &k);
+
 
 
 int main() {
 	clock_t beginClockTimer = clock();
 	unsigned __int64 ticks = __rdtsc();
-
-
-
 
 	//For Fern to read in txt files
 	/*
@@ -56,18 +58,17 @@ int main() {
 	vector<vector<double>> W(createW(readW));
 	*/
 
-	int n = 15, m = 7, k = 2, numThreads = 2;
+	int n = 15, m = 7, k = 2, numThreads = 3;
 	constexpr bool wMod = false;
 	ofstream outFile;
-
 
 
 	for (int i = 15; i < 16; ++i) {
 		matrix W(createW(i, m, wMod));
 		printVector(W);
-		for (int j = 4; j < 5; ++j) {
+		for (int j = 3; j < 8; ++j) {
 			//outFile.open("15x15 Examples.txt", ofstream::app);
-			bigSum(W, i, m, j, numThreads);
+			bigSum(W, i, m, 3, numThreads);
 			cout << "(" << i << "," << m << "," << j << "): " << finalValue << endl;
 			finalValue = 0;
 			//outFile.close();
@@ -91,7 +92,7 @@ int main() {
 
 
 
-void ClockTicks(const unsigned __int64 &ticks) {
+inline void ClockTicks(const unsigned __int64 &ticks) {
 
 	if (ticks < 1000)
 		cout << ticks << " clock ticks" << flush;
@@ -113,15 +114,16 @@ matrix createW(const int &n, const int &m, const bool &wMod) {
 	matrix W(n, vector<double>(n));
 
 	for (size_t i = 0; i < n; ++i) {
-		for (size_t j = i; j < n; ++j) {
-			W[i][j] = rand() % 2;
+		for (size_t j = 0; j < n; ++j) {
+			if (j > i)
+				W[i][j] = rand() % 2;
+			else if (j < i)
+				W[i][j] = W[j][i];
+			else
+				W[i][j] = 0;	//zeroing out the diagonal
 		}
 	}
-	for (size_t i = 1; i < n; ++i) {
-		for (size_t j = 0; j < i; ++j) {
-			W[i][j] = W[j][i];
-		}
-	}
+
 	double a = ((m >= 10 && n >= 8 * m ? .27 : .07)) / (m - 1);
 
 	for (auto &row : W)
@@ -133,14 +135,11 @@ matrix createW(const int &n, const int &m, const bool &wMod) {
 		}
 
 
-	for (size_t i = 0; i < n; ++i)	// "zeroing" out the diagonal
-		W[i][i] = 1 - a;
-
 	return W;
 
 }
 
-matrix createW(ifstream &inFile) {
+inline matrix createW(ifstream &inFile) {
 
 	matrix W;
 	//delimited by spaces and enters
@@ -253,13 +252,10 @@ inline void bigSum(matrix &matrixW, const int &n, const int &m, const int &k, co
 
 	long double returnValue = 0;
 
-	//cout << "W is a " << matrixW.size() << " by " << matrixW.size() << " matrix: " << endl << endl;
-	//printVector(matrixW);
-
 	auto X = subsetsToList(n, 2);
 
 	parallel_for(0, threadCount, [&](int i) {
-		subsetsToList2(X, matrixW, n, m, k, i, threadCount); });
+		subsetsToList2(ref(X), ref(matrixW), n, m, k, i, threadCount); });
 
 }
 
@@ -269,7 +265,12 @@ inline void bigSum(matrix &matrixW, const int &n, const int &m, const int &k, co
 
 
 
-
+long long partialFactorial(const long &n, const long &n2, const long &k) {
+	long temp = n;
+	if (temp > n2 - k)
+		return partialFactorial(temp - 1, n2, k) * temp;
+	return 1;
+}
 
 
 
@@ -320,9 +321,3 @@ void printVector(const vector<set> &vec) {
 }
 
 
-long long partialFactorial(const long &n, const long &n2, const long &k) {
-	long temp = n;
-	if (temp > n2 - k)
-		return partialFactorial(temp - 1, n2, k) * temp;
-	return 1;
-}
