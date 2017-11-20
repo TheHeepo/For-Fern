@@ -29,7 +29,7 @@ matrix createW(ifstream &inFile);
 
 set subsetsToList(const int &n, const int &r);
 void subsetsToList2(
-	set &matrix1, matrix &matrixW, const int &n, const int & m, const int &k, const int &threadCount);
+	set &matrix1, matrix &matrixW, const int &n, const int & m, const int &k, const int &threadIndex, const int &threadCount);
 
 long roUnion(set &vec);
 double matProduct(matrix &matrixW, set &set1);
@@ -55,16 +55,16 @@ int main() {
 	vector<vector<double>> W(createW(readW));
 	*/
 
-	int n = 15, m = 7, k = 2, numThreads = 2;
+	int n = 15, m = 7, k = 2, numThreads = 1;
 	constexpr bool wMod = false;
 	ofstream outFile;
-	
 
 
-	for (int i = 10; i < 11; ++i) {
+
+	for (int i = 8; i < 16; ++i) {
 		matrix W(createW(i, m, wMod));
 		printVector(W);
-		for (int j = 2; j < 3; ++j) {
+		for (int j = 0; j < 4; ++j) {
 			//outFile.open("15x15 Examples.txt", ofstream::app);
 			bigSum(W, i, m, j, numThreads);
 			cout << "(" << i << "," << m << "," << j << "): " << finalValue << endl;
@@ -72,7 +72,7 @@ int main() {
 			//outFile.close();
 		}
 	}
-	
+
 
 
 
@@ -158,7 +158,7 @@ matrix createW(ifstream &inFile) {
 set subsetsToList(const int &n, const int &r) {
 
 	set toReturn;
-	toReturn.reserve(round(tgamma(n + 1))/(2 * round(tgamma(n - 1))));	// n choose 2
+	toReturn.reserve(round(tgamma(n + 1)) / (2 * round(tgamma(n - 1))));	// n choose 2
 
 	long index = 0;
 
@@ -173,21 +173,21 @@ set subsetsToList(const int &n, const int &r) {
 			}
 		}
 	} while (prev_permutation(v.begin(), v.end()));
-	
+
 
 	return toReturn;
 
 }
 
 void subsetsToList2(
-	set &matrix1, matrix &matrixW, const int &n, const int & m, const int &k, const int &threadCount) {
+	set &matrix1, matrix &matrixW, const int &n, const int & m, const int &k, const int &threadIndex, const int &threadCount) {
 
 
 	unsigned long long num = round(tgamma(n + 1)) / (2 * round(tgamma(n - 1)));	// n choose 2
-	static int threadIndex = -1;
-	bool skipFirstElement = threadIndex == -1 ? false : true;
 	long skippingIndex = 0;
-	++threadIndex;
+
+	int counter = 0;
+
 
 	set XsubK(1);
 
@@ -202,22 +202,21 @@ void subsetsToList2(
 		if ((++skippingIndex + threadIndex) % threadCount != 0)
 			continue;
 
-		for (long i = 0; i < matrix1.size(); ++i) 
-			if (v[i]) 
+		for (long i = 0; i < matrix1.size(); ++i)
+			if (v[i])
 				XsubK[0].push_back(i + 1);
-			
-		
+
+
 		for (long j = 0; j < XsubK[0].size(); ++j)
 			toReturn[0].push_back(matrix1[XsubK[0][j] - 1]);
 
 		ro = roUnion(toReturn[0]);
 		temp = (round(tgamma(n - ro)) / (round(tgamma(m - ro)) * round(tgamma(n - m))));
-		if (temp >= 0 && !skipFirstElement)
+		if (temp >= 0)
 			returnValue += temp * matProduct(matrixW, toReturn[0]);
 
 		toReturn[0].clear();
 		XsubK[0].clear();
-		skipFirstElement = false;
 
 	} while (prev_permutation(v.begin(), v.end()));
 
@@ -244,13 +243,13 @@ inline long roUnion(set &vec) {
 inline double matProduct(matrix &matrixW, set &set1) {
 	double returnValue = 1;
 	for (const auto &index : set1)
-		returnValue *= matrixW[index[0]-1][index[1] - 1] - 1;
+		returnValue *= matrixW[index[0] - 1][index[1] - 1] - 1;
 	return returnValue;
 
 }
 
 inline void bigSum(matrix &matrixW, const int &n, const int &m, const int &k, const int &threadCount) {
-	
+
 	long double returnValue = 0;
 
 	//cout << "W is a " << matrixW.size() << " by " << matrixW.size() << " matrix: " << endl << endl;
@@ -258,15 +257,14 @@ inline void bigSum(matrix &matrixW, const int &n, const int &m, const int &k, co
 
 	auto X = subsetsToList(n, 2);
 
-
-	thread first(subsetsToList2, X, matrixW, n, m, k, threadCount);
-	thread second(subsetsToList2, X, matrixW, n, m, k, threadCount);
-
-	first.join();
-	second.join();
+	vector<thread> threads;
+	for (int i = 0; i < threadCount; ++i)
+		threads.push_back(thread(subsetsToList2, X, matrixW, n, m, k, i, threadCount));
 
 
-	
+	for (auto &index : threads)
+		index.join();
+
 }
 
 
